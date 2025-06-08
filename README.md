@@ -15,7 +15,7 @@
 <div align="center">
 Рисунок 1 – Окно "Главное меню"
 </div>
-
+<br>
 
 <div align="center">
 <img src="images/gamemode.png" alt=""/>
@@ -24,7 +24,7 @@
 <div align="center">
 Рисунок 2 – Окно "Меню выбора режима"
 </div>
-
+<br>
 
 <div align="center">
 <img src="images/game.png" alt=""/>
@@ -33,7 +33,7 @@
 <div align="center">
 Рисунок 3 – Окно "Демонстрация игрового процесса"
 </div>
-
+<br>
 
 <div align="center">
 <img src="images/game_over.png" alt=""/>
