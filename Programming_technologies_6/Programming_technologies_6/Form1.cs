@@ -17,18 +17,21 @@ namespace Programming_technologies_6
     {
         List<Emitter> emitters = new List<Emitter>();
         Emitter emitter;
-        Emitter playerEmitter; // Эмиттер для стрельбы игрока
-        ExplosionEmitter explosionEmitter; // Эмиттер для взрыва игрока
-        private bool isExplosionActive = false; // Флаг активности взрыва
-        private int explosionTimerTicks = 0; // Счетчик тиков взрыва
+        Emitter playerEmitter;
+        ExplosionEmitter explosionEmitter;
+        private bool isExplosionActive = false;
+        private int explosionTimerTicks = 0;
+        private bool isPlayerVisible = true; // Добавляем флаг видимости игрока
 
-        // Координаты игрока
         private float playerX;
         private float playerY;
         private const float playerSpeed = 10f;
-        private const float playerSize = 20f;
 
-        // Игровые параметры
+        private const float playerSize = 20f * 3;
+        private const float enemySize = 15f * 3;
+        private const float bulletSize = 5f * 4;
+        private const float bombSize = 7f * 4;
+
         private int score = 0;
         private int health = 3;
         private bool isGameOver = false;
@@ -47,6 +50,11 @@ namespace Programming_technologies_6
         private Image backgroundImage;
         private int backgroundOffsetY = 0;
         private int backgroundScrollSpeed = 2;
+
+        private Image playerImage;
+        private Image enemyImage;
+        private Image bulletImage;
+        private Image bombImage;
 
         public Form1(GameMode mode) : this()
         {
@@ -79,11 +87,9 @@ namespace Programming_technologies_6
             InitializeComponent();
             picDisplay.Image = new Bitmap(picDisplay.Width, picDisplay.Height);
 
-            // Инициализация игрока
             playerX = picDisplay.Width / 2;
             playerY = picDisplay.Height - 50;
 
-            // Создаем основной эмиттер для врагов
             this.emitter = new Emitter
             {
                 SpeedMin = 2,
@@ -95,7 +101,6 @@ namespace Programming_technologies_6
                 Y = 0,
             };
 
-            // Создаем эмиттер для стрельбы игрока
             this.playerEmitter = new Emitter
             {
                 SpeedMin = 10,
@@ -107,7 +112,6 @@ namespace Programming_technologies_6
                 Y = (int)playerY,
             };
 
-            // Создаем эмиттер для взрыва игрока
             this.explosionEmitter = new ExplosionEmitter
             {
                 SpeedMin = 5,
@@ -125,22 +129,43 @@ namespace Programming_technologies_6
 
             emitters.Add(this.emitter);
             emitters.Add(this.playerEmitter);
-            // emitters.Add(this.explosionEmitter); // УБРАНО: взрыв не должен быть всегда активен
 
-            // Отключаем автоматическое создание частиц для обоих эмиттеров
             this.emitter.ParticlesPerTick = 0;
             this.emitter.ParticlesCount = 0;
             this.playerEmitter.ParticlesPerTick = 0;
             this.playerEmitter.ParticlesCount = 0;
 
-            // Устанавливаем фокус на форму для обработки клавиш
             this.KeyPreview = true;
             this.KeyDown += Form1_KeyDown;
             this.KeyUp += Form1_KeyUp;
             this.MouseDown += Form1_MouseDown;
             this.picDisplay.MouseDown += Form1_MouseDown;
 
-            // Запускаем таймер для создания вражеских частиц
+            try
+            {
+                playerImage = Image.FromFile("mainship.png");
+                // Масштабируем изображение игрока
+                playerImage = ResizeImage(playerImage, (int)playerSize, (int)playerSize);
+
+                enemyImage = Image.FromFile("enemyship.png");
+                // Масштабируем изображение врага
+                enemyImage = ResizeImage(enemyImage, (int)enemySize, (int)enemySize);
+
+                bulletImage = Image.FromFile("bullet.png");
+                // Масштабируем изображение пули
+                bulletImage = ResizeImage(bulletImage, (int)bulletSize, (int)bulletSize);
+
+                bombImage = Image.FromFile("rocket_bomb.png");
+                // Масштабируем изображение бомбы
+                bombImage = ResizeImage(bombImage, (int)bombSize, (int)bombSize);
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки изображений: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // Если не удалось загрузить изображения, можно использовать дефолтное
+            }
+
             enemySpawnTimer = new System.Windows.Forms.Timer();
             enemySpawnTimer.Interval = enemySpawnInterval;
             enemySpawnTimer.Tick += (s, e) => {
@@ -148,23 +173,20 @@ namespace Programming_technologies_6
                 {
                     if (isGameStarted && (DateTime.Now - gameStartTime).TotalSeconds >= 2)
                     {
-                        // Создаем только одну КРАСНУЮ частицу за тик
-                        var particle = new ParticleColorful();
-                        particle.FromColor = Color.Red;
-                        particle.ToColor = Color.FromArgb(0, Color.Red);
+                        var particle = new ImageParticle();
+                        particle.Pic = enemyImage;
                         particle.X = Particle.rand.Next(0, picDisplay.Width);
                         particle.Y = 0;
                         particle.SpeedX = Particle.rand.Next(-2, 3);
                         particle.SpeedY = enemySpeedY;
                         particle.Life = 100;
-                        particle.Radius = 15;
+                        particle.Radius = (int)(enemySize / 2); // Радиус как у врага
                         emitter.particles.Add(particle);
                     }
                 }
             };
             enemySpawnTimer.Start();
 
-            // Запускаем таймер отсчета
             countdownTimer = new System.Windows.Forms.Timer();
             countdownTimer.Interval = 1000;
             countdownTimer.Tick += (s, e) => {
@@ -175,15 +197,40 @@ namespace Programming_technologies_6
                     isCountdownActive = false;
                     isGameStarted = true;
                     gameStartTime = DateTime.Now;
-                    // Очищаем все частицы при окончании отсчета
+                    timer1.Start();
                     emitter.particles.Clear();
                     playerEmitter.particles.Clear();
                 }
             };
             countdownTimer.Start();
 
-            // Загружаем фоновое изображение
             backgroundImage = Image.FromFile("background.jpg");
+        }
+
+        // Метод для масштабирования изображения
+        private Image ResizeImage(Image image, int width, int height)
+        {
+            var destRect = new Rectangle(0, 0, width, height);
+            var destImage = new Bitmap(width, height);
+
+            destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+
+            using (var graphics = Graphics.FromImage(destImage))
+            {
+                graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+                graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+
+                using (var wrapMode = new System.Drawing.Imaging.ImageAttributes())
+                {
+                    wrapMode.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY);
+                    graphics.DrawImage(image, destRect, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, wrapMode);
+                }
+            }
+
+            return destImage;
         }
 
         private void Form1_KeyDown(object sender, KeyEventArgs e)
@@ -209,16 +256,14 @@ namespace Programming_technologies_6
         {
             if (!isGameOver && e.Button == MouseButtons.Left && !isCountdownActive)
             {
-                // Создаем частицу для выстрела
-                var particle = new ParticleColorful();
-                particle.FromColor = Color.White;
-                particle.ToColor = Color.FromArgb(0, Color.White);
+                var particle = new ImageParticle();
+                particle.Pic = bulletImage;
                 particle.X = playerX;
                 particle.Y = playerY;
                 particle.SpeedX = 0;
                 particle.SpeedY = -30;
                 particle.Life = 100;
-                particle.Radius = 3;
+                particle.Radius = (int)(bulletSize / 2); //  bulletSize
                 playerEmitter.particles.Add(particle);
             }
         }
@@ -230,7 +275,6 @@ namespace Programming_technologies_6
             explosionEmitter.particles.Clear();
             explosionEmitter.X = (int)playerX;
             explosionEmitter.Y = (int)playerY;
-            // Создаем множество частиц для взрыва
             for (int i = 0; i < 50; i++)
             {
                 var particle = new ParticleColorful();
@@ -238,17 +282,17 @@ namespace Programming_technologies_6
                 particle.ToColor = Color.Orange;
                 particle.X = playerX;
                 particle.Y = playerY;
-                
-                // Случайное направление взрыва с большим разбросом
+
                 var direction = (double)Particle.rand.Next(360);
-                var speed = 10 + Particle.rand.Next(20); // Увеличиваем скорость
+                var speed = 10 + Particle.rand.Next(20);
                 particle.SpeedX = (float)(Math.Cos(direction / 180 * Math.PI) * speed);
                 particle.SpeedY = (float)(Math.Sin(direction / 180 * Math.PI) * speed);
-                
+
                 particle.Life = 50 + Particle.rand.Next(50);
                 particle.Radius = 2 + Particle.rand.Next(3);
                 explosionEmitter.particles.Add(particle);
             }
+            isPlayerVisible = false; //  скрываем игрока
         }
 
         private void CheckGameOver()
@@ -257,8 +301,9 @@ namespace Programming_technologies_6
             {
                 isGameOver = true;
                 enemySpawnTimer.Stop();
-                // Запускаем эффект взрыва
-                StartExplosion();
+                timer1.Stop();
+                StartExplosion(); // Запускаем взрыв
+                timer1.Start(); // Перезапускаем таймер для отрисовки взрыва
             }
         }
 
@@ -284,18 +329,16 @@ namespace Programming_technologies_6
                         g.DrawImage(backgroundImage, 0, backgroundOffsetY, picDisplay.Width, h);
                         g.DrawImage(backgroundImage, 0, backgroundOffsetY - h, picDisplay.Width, h);
                     }
-                    // Отрисовка игрока
-                    g.FillEllipse(Brushes.White, playerX - playerSize/2, playerY - playerSize/2, playerSize, playerSize);
-                    // Отрисовка счета и здоровья
+                    //  Отрисовка игрока ИЗОБРАЖЕНИЕМ
+                    g.DrawImage(playerImage, playerX - playerSize / 2, playerY - playerSize / 2, playerSize, playerSize);
                     var font = new Font("Arial", 16);
                     g.DrawString($"Счет: {score}", font, Brushes.White, picDisplay.Width - 150, 10);
                     g.DrawString($"Здоровье: {health}", font, Brushes.White, picDisplay.Width - 150, 40);
-                    // Отрисовка отсчета
                     var countdownFont = new Font("Arial", 48);
                     var countdownText = countdown.ToString();
                     var textSize = g.MeasureString(countdownText, countdownFont);
-                    g.DrawString(countdownText, countdownFont, Brushes.White, 
-                        (picDisplay.Width - textSize.Width) / 2, 
+                    g.DrawString(countdownText, countdownFont, Brushes.White,
+                        (picDisplay.Width - textSize.Width) / 2,
                         (picDisplay.Height - textSize.Height) / 2);
                 }
                 picDisplay.Invalidate();
@@ -315,21 +358,18 @@ namespace Programming_technologies_6
                         g.DrawImage(backgroundImage, 0, backgroundOffsetY, picDisplay.Width, h);
                         g.DrawImage(backgroundImage, 0, backgroundOffsetY - h, picDisplay.Width, h);
                     }
-                    // ОТРИСОВКА ИМЕННО ВЗРЫВА (игрок НЕ рисуется)
                     explosionEmitter.Render(g);
-                    // Отрисовка счета и здоровья
                     var font = new Font("Arial", 16);
                     g.DrawString($"Счет: {score}", font, Brushes.White, picDisplay.Width - 150, 10);
                     g.DrawString($"Здоровье: {health}", font, Brushes.White, picDisplay.Width - 150, 40);
                 }
                 picDisplay.Invalidate();
                 explosionTimerTicks++;
-                if (explosionTimerTicks >= 75) // ~3 секунды при 40мс на тик
+                if (explosionTimerTicks >= 75)
                 {
                     isExplosionActive = false;
                     explosionEmitter.particles.Clear();
-                    
-                    // Создаем форму с тремя кнопками
+
                     var resultForm = new Form
                     {
                         Text = "Game Over",
@@ -376,7 +416,6 @@ namespace Programming_technologies_6
 
                     if (result == DialogResult.Yes)
                     {
-                        // Перезапуск игры
                         score = 0;
                         health = 3;
                         isGameOver = false;
@@ -384,20 +423,18 @@ namespace Programming_technologies_6
                         playerEmitter.particles.Clear();
                         explosionEmitter.particles.Clear();
                         enemySpawnTimer.Start();
+                        gameStartTime = DateTime.Now;
 
-                        // Сброс координат игрока
                         playerX = picDisplay.Width / 2;
                         playerY = picDisplay.Height - 50;
-
-                        // Сброс и запуск отсчёта
                         countdown = 5;
                         isCountdownActive = true;
                         isGameStarted = false;
                         countdownTimer.Start();
+                        isPlayerVisible = true; //  возвращаем видимость
                     }
                     else if (result == DialogResult.Retry)
                     {
-                        // Возврат в главное меню
                         this.Hide();
                         var menu = new MainMenuForm();
                         if (menu.ShowDialog() == DialogResult.OK)
@@ -413,7 +450,6 @@ namespace Programming_technologies_6
                     }
                     else
                     {
-                        // Выход из игры
                         Application.Exit();
                     }
                 }
@@ -422,7 +458,6 @@ namespace Programming_technologies_6
 
             if (!isGameOver)
             {
-                // Плавное движение игрока
                 if (moveLeft)
                     playerX = Math.Max(playerSize, playerX - playerSpeed);
                 if (moveRight)
@@ -431,11 +466,18 @@ namespace Programming_technologies_6
                 emitter.UpdateState();
                 playerEmitter.UpdateState();
 
-                // Проверка столкновений пуль с врагами
                 for (int i = playerEmitter.particles.Count - 1; i >= 0; i--)
                 {
                     if (i >= playerEmitter.particles.Count) continue;
                     var bullet = playerEmitter.particles[i];
+
+                    // Проверяем, достигла ли пуля верхней границы экрана
+                    if (bullet.Y < 0)  // Предполагаем, что верхний край экрана имеет координату Y = 0
+                    {
+                        playerEmitter.particles.RemoveAt(i);
+                        continue; // Переходим к следующей пуле, чтобы избежать ошибок
+                    }
+
                     for (int j = emitter.particles.Count - 1; j >= 0; j--)
                     {
                         if (j >= emitter.particles.Count) continue;
@@ -443,7 +485,7 @@ namespace Programming_technologies_6
                         float dx = bullet.X - enemy.X;
                         float dy = bullet.Y - enemy.Y;
                         float distance = (float)Math.Sqrt(dx * dx + dy * dy);
-                        
+
                         if (distance < (bullet.Radius + enemy.Radius))
                         {
                             if (i < playerEmitter.particles.Count)
@@ -456,7 +498,6 @@ namespace Programming_technologies_6
                     }
                 }
 
-                // Проверка столкновений игрока с врагами только если не идет отсчет
                 if (!isCountdownActive)
                 {
                     for (int i = emitter.particles.Count - 1; i >= 0; i--)
@@ -467,7 +508,8 @@ namespace Programming_technologies_6
                         float dy = playerY - enemy.Y;
                         float distance = (float)Math.Sqrt(dx * dx + dy * dy);
 
-                        if (distance < (playerSize/2 + enemy.Radius))
+                        // Хитбокс
+                        if (distance < (playerSize / 2 + enemy.Radius))
                         {
                             if (i < emitter.particles.Count)
                                 emitter.particles.RemoveAt(i);
@@ -487,26 +529,50 @@ namespace Programming_technologies_6
                         g.DrawImage(backgroundImage, 0, backgroundOffsetY, picDisplay.Width, h);
                         g.DrawImage(backgroundImage, 0, backgroundOffsetY - h, picDisplay.Width, h);
                     }
+
                     // Отрисовка игрока
-                    g.FillEllipse(Brushes.White, playerX - playerSize/2, playerY - playerSize/2, playerSize, playerSize);
-                    // Отрисовка частиц
+                    if (isPlayerVisible)
+                        g.DrawImage(playerImage, playerX - playerSize / 2, playerY - playerSize / 2, playerSize, playerSize);
+
                     if (!isCountdownActive)
                     {
-                        emitter.Render(g);
-                        playerEmitter.Render(g);
+                        foreach (var particle in emitter.particles)
+                        {
+                            if (particle is ImageParticle imageParticle)
+                            {
+                                g.DrawImage(imageParticle.Pic, imageParticle.X - imageParticle.Radius, imageParticle.Y - imageParticle.Radius, imageParticle.Radius * 2, imageParticle.Radius * 2);
+                            }
+                            else
+                            {
+                                particle.Draw(g);
+                            }
+
+                        }
+
+
+                        foreach (var particle in playerEmitter.particles)
+                        {
+                            if (particle is ImageParticle imageParticle)
+                            {
+                                g.DrawImage(imageParticle.Pic, imageParticle.X - imageParticle.Radius, imageParticle.Y - imageParticle.Radius, imageParticle.Radius * 2, imageParticle.Radius * 2);
+                            }
+                            else
+                            {
+                                particle.Draw(g);
+                            }
+
+                        }
                     }
-                    // Отрисовка счета и здоровья
                     var font = new Font("Arial", 16);
                     g.DrawString($"Счет: {score}", font, Brushes.White, picDisplay.Width - 150, 10);
                     g.DrawString($"Здоровье: {health}", font, Brushes.White, picDisplay.Width - 150, 40);
-                    // Отрисовка отсчета
                     if (isCountdownActive)
                     {
                         var countdownFont = new Font("Arial", 48);
                         var countdownText = countdown.ToString();
                         var textSize = g.MeasureString(countdownText, countdownFont);
-                        g.DrawString(countdownText, countdownFont, Brushes.White, 
-                            (picDisplay.Width - textSize.Width) / 2, 
+                        g.DrawString(countdownText, countdownFont, Brushes.White,
+                            (picDisplay.Width - textSize.Width) / 2,
                             (picDisplay.Height - textSize.Height) / 2);
                     }
                 }
