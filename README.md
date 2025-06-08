@@ -18,7 +18,7 @@
 
 
 <div align="center">
-<img src="images/game_mode.png" alt=""/>
+<img src="images/gamemode.png" alt=""/>
 </div>
 
 <div align="center">
